@@ -6,6 +6,7 @@
                 "/Applications/Arduino.app/Contents/Java/tools/**",
                 "/Users/flo/Documents/Arduino/libraries/**",
                 "/Users/flo/Documents/Arduino/libraries/WiFiEspAT/src",
+                "/Users/flo/Documents/Arduino/libraries/hd44780",
                 "/Applications/Arduino.app/Contents/Java/libraries/**",
                 "/Applications/Arduino.app/Contents/Java/hardware/tools/**",
                 "/Applications/Arduino.app/Contents/Java/hardware/arduino/avr/**",

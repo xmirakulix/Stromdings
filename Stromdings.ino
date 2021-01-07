@@ -1,7 +1,11 @@
-//#include "lib/New-LiquidCrystal/LiquidCrystal_I2C.h"
 #include <SoftwareSerial.h>
 #include <WiFiEspAT.h>
+
 #include <SPI.h>
+
+#include <Wire.h>
+#include <hd44780.h>                       // main hd44780 header
+#include <hd44780ioClass/hd44780_I2Cexp.h> // i2c expander i/o class header
 
 // #define DEBUG // toggle Debug Output
 
@@ -11,11 +15,12 @@ const int m_CntCsPins = sizeof(m_CsPins) / sizeof(int); // Anzahl CS Pins
 const int m_PsuCalibration = 228.20;                    // calibration factor for used 9VAC PSU
 const unsigned long m_MeasureInterval = 1 * 1000;       // ms, Intervall der Messungen
 unsigned long m_LastMeasureTime = 0;                    // letzte Messung
-unsigned int m_curMeasurePort = 1;                         // zuletzt gemessener Pin
+unsigned int m_curMeasurePort = 1;                      // zuletzt gemessener Pin
 const unsigned long m_MeasureDuration = 20 * 1000;      // 20k µs, 50Hz = 20ms pro Welle
 
 // ######## LCD display
 //LiquidCrystal_I2C m_Lcd(0x27, 2, 1, 0, 4, 5, 6, 7, 3, POSITIVE);
+hd44780_I2Cexp m_Lcd; // declare lcd object: auto locate & auto config expander chip
 //String m_LcdLine1, m_LcdLine2 = "";
 //bool m_LcdLineComplete = false;
 
@@ -34,32 +39,23 @@ void setup()
   while (!Serial)
     delay(10);
 
-  // setupWifi();
-
-  // connectWiFi();
+  // setup and connect WiFi
+  setupWifi();
+  connectWiFi();
 
   // setup power measurement
   setupSPIandADCs(m_CsPins, m_CntCsPins);
 
   // setup LCD
-  //  m_Lcd.begin(16, 2);
-  //  m_Lcd.home();
-  //  m_Lcd.noBlink();
+  setupLcd();
 
-  //const char *server = "home.parnigoni.net";
-  //sendHttpRequest(server);
+  const char *server = "home.parnigoni.net";
+  sendHttpRequest(server);
 }
 
 void loop()
 {
-  if (Serial.available())
-  {
-    char c = Serial.read();
-    m_WifiPort.write(c);
-  }
-
-  //setupWifi();
-  //handleWiFi();
+  handleWiFi();
 
   handlePower();
 }
@@ -164,8 +160,8 @@ void handlePower()
   if ((millis() - m_LastMeasureTime) > m_MeasureInterval)
   {
     m_LastMeasureTime = millis();
-    
-    // 0x1 (00|01) to 0xF (11|11) -> 4x chip | 4x pin 
+
+    // 0x1 (00|01) to 0xF (11|11) -> 4x chip | 4x pin
     int csPin = m_curMeasurePort >> 2; // extraxt chip
     int adcPin = m_curMeasurePort & 3; // extract pin
 
@@ -176,7 +172,7 @@ void handlePower()
     Serial.print(m_CsPins[csPin]);
     Serial.print(", Pin: ");
     Serial.print(adcPin);
- 
+
     voltage = getAdcVoltage(m_CsPins[0], 0, m_MeasureDuration, m_PsuCalibration);
     power = getAdcPower(m_CsPins[csPin], adcPin, m_MeasureDuration, 220, 2000, voltage);
 
@@ -187,7 +183,7 @@ void handlePower()
     Serial.println();
 
     m_curMeasurePort++;
-    if (m_curMeasurePort & 16) 
+    if (m_curMeasurePort & 16)
       m_curMeasurePort = 1; // start over at port 1 (port 0 = voltage)
   }
 }
@@ -223,11 +219,6 @@ float getAdcVoltage(int csPin, int adcPin, unsigned long measureDuration, float 
   unsigned long lsbValue = 610351; // 1 bit in nV (=5V/2^13)
   unsigned long voltage = 0;
   float primVoltage = 0;
-  bool debug = false; // print debug output
-
-#ifdef DEBUG
-  debug = true;
-#endif
 
   int adcVal = readAdcRms(csPin, adcPin, measureDuration);
 
@@ -237,14 +228,13 @@ float getAdcVoltage(int csPin, int adcPin, unsigned long measureDuration, float 
   primVoltage = voltage * calibration; // upscale to primary
   primVoltage /= 1000;                 // conv to V
 
-  if (debug)
-  {
-    Serial.print("getAdcVoltage() Res: ");
-    Serial.print(adcVal);
-    Serial.print(" V: ");
-    Serial.print(primVoltage);
-    Serial.println();
-  }
+#ifdef DEBUG
+  Serial.print("getAdcVoltage() Res: ");
+  Serial.print(adcVal);
+  Serial.print(" V: ");
+  Serial.print(primVoltage);
+  Serial.println();
+#endif
 
   return primVoltage;
 }
@@ -264,16 +254,12 @@ int getAdcPower(int csPin, int adcPin, unsigned long measureDuration, int shuntO
 {
   unsigned long power = 0;
   unsigned long lsbValue = 610351; // 1 bit in nV (=5V/2^13)
-  bool debug = false;              // print debug output
-
-#ifdef DEBUG
-  debug = true;
-#endif
 
   if (shuntOhms == 0)
   {
-    if (debug)
-      Serial.println(F("##### ERROR getAdcPower(): shuntOhms=0, div/0!"));
+#ifdef DEBUG
+    Serial.println(F("##### ERROR getAdcPower(): shuntOhms=0, div/0!"));
+#endif
     return 0;
   }
 
@@ -290,14 +276,13 @@ int getAdcPower(int csPin, int adcPin, unsigned long measureDuration, int shuntO
   power /= 1000;               //                  58.166 / 1000 = 58  <-- 99,5% -->   58.265,6323374847 / 1000 = 58,26
                                //                                      absolute Error is between 0 and 3W
 
-  if (debug)
-  {
-    Serial.print("getAdcPower() Res: ");
-    Serial.print(adcVal);
-    Serial.print(" Power: ");
-    Serial.print(power);
-    Serial.println();
-  }
+#ifdef DEBUG
+  Serial.print("getAdcPower() Res: ");
+  Serial.print(adcVal);
+  Serial.print(" Power: ");
+  Serial.print(power);
+  Serial.println();
+#endif
 
   return int(power); // Power in W
 }
@@ -343,11 +328,6 @@ int readAdcRms(int csPin, int adcPin, unsigned long measureDuration)
   int count = 0;            // Anzahl der Messungen
   int adcValue = 0;         // nimmt den Messwert vom ADC auf
   unsigned long adcRms = 0; // nimmt die quadrierten Summen der gesamten Periode auf
-  bool debug = false;       // print debug output
-
-#ifdef DEBUG
-  debug = true;
-#endif
 
   SPI.beginTransaction(SPISettings(1700000, MSBFIRST, SPI_MODE0)); // max 1,7MHz for MCP3304
   do
@@ -361,8 +341,10 @@ int readAdcRms(int csPin, int adcPin, unsigned long measureDuration)
 
   if (count == 0)
   {
-    if (debug)
-      Serial.println(F("##### ERROR readAdcRms(): count=0, div/0!"));
+#ifdef DEBUG
+    Serial.println(F("##### ERROR readAdcRms(): count=0, div/0!"));
+#endif
+
     return 0;
   }
 
@@ -373,48 +355,77 @@ int readAdcRms(int csPin, int adcPin, unsigned long measureDuration)
   {
     ret = 0;
 
-    if (debug)
-      Serial.println(F("####### ATTENTION, readAdcRms() return value set to 0 because low val read (probably noise)!"));
+#ifdef DEBUG
+    Serial.println(F("####### ATTENTION, readAdcRms() return value set to 0 because low val read (probably noise)!"));
+#endif
   }
 
-  if (debug)
-  {
-    Serial.print("readAdcRms(");
-    Serial.print(csPin);
-    Serial.print(",");
-    Serial.print(adcPin);
-    Serial.print(") Cnt: ");
-    Serial.print(count);
-    Serial.print(" Res: ");
-    Serial.print(adcRms);
-    Serial.print(" Return: ");
-    Serial.println(ret);
-  }
+#ifdef DEBUG
+  Serial.print("readAdcRms(");
+  Serial.print(csPin);
+  Serial.print(",");
+  Serial.print(adcPin);
+  Serial.print(") Cnt: ");
+  Serial.print(count);
+  Serial.print(" Res: ");
+  Serial.print(adcRms);
+  Serial.print(" Return: ");
+  Serial.println(ret);
+#endif
 
   return ret;
 }
 
 // ################# LCD stuff #################
-/*
-void writeLCD(char c)
+
+void setupLcd()
 {
-  if (c > 31)
+  int status = m_Lcd.begin(16, 2);
+  if (status) // non zero status means it was unsuccesful
   {
-    if (m_LcdLineComplete)
-    {
-      m_LcdLine1 = m_LcdLine2;
-      m_LcdLine2 = "";
-      m_LcdLineComplete = false;
-      m_Lcd.clear();
-      Serial.println(F("LCD cleared..."));
-      m_Lcd.home();
-      m_Lcd.print(m_LcdLine1);
-      m_Lcd.setCursor(0,1); 
-    }
-    m_Lcd.print(c);
-    m_LcdLine2 += c;
+    // hd44780 has a fatalError() routine that blinks an led if possible
+    // begin() failed so blink error code using the onboard LED if possible
+    Serial.println(F("setupLcd(): Failed to initialize LCD"));
+    hd44780::fatalError(status); // does not return
   }
-  if (c == 10)
-     m_LcdLineComplete = true;  
+
+#ifdef DEBUG
+    Serial.print(F("setupLcd(): LCD initialized...")
+#endif
+
+  writeLCD();
 }
-*/
+
+void writeLCD()
+{
+
+  m_Lcd.lineWrap();
+  m_Lcd.clear();
+  m_Lcd.print("WrapTest");
+  delay(2000);
+  m_Lcd.clear();
+
+  //print the configured LCD geometry
+  m_Lcd.print(16);
+  m_Lcd.print("x");
+  m_Lcd.print(2);
+  delay(3000);
+  m_Lcd.clear();
+
+  m_Lcd.print("This is a very long line of text");
+  delay(3000);
+  m_Lcd.clear();
+
+  m_Lcd.cursor(); // turn on cursor so you can see where it is
+  char c = '0'; // start at the character for the number zero
+  for (int i = 2 * 16 * 1; i; i--)
+  {
+    m_Lcd.print(c++);
+    delay(200); // slow things down to watch the printing & wrapping
+
+    if (c > 0x7e) // wrap back to beginning of printable ASCII chars
+      c = '!';
+  }
+  delay(3000);
+  m_Lcd.noCursor(); // turn off cursor
+}
