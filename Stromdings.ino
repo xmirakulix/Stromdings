@@ -1,188 +1,198 @@
-#include <LiquidCrystal_I2C.h>
+//#include "lib/New-LiquidCrystal/LiquidCrystal_I2C.h"
 #include <SoftwareSerial.h>
-#include <WiFiEsp.h>
+#include <WiFiEspAT.h>
 #include <SPI.h>
 
-// #define DEBUG                                   // toggle Debug Output
+// #define DEBUG // toggle Debug Output
 
 // ######## Power measurement
-const int m_MeasureInterval = 1000;             // Intervall der Messungen
-int m_LastMeasureTime;                          // letzte Messung
-const unsigned long m_MeasureDuration = 20000;  // 20k µs, 50Hz = 20ms pro Welle
-const int m_CsPins[] = {10, 9, 8, 7};           // list of CS pins
+const int m_CsPins[] = {7, 8, 9, 10};                   // list of CS pins
 const int m_CntCsPins = sizeof(m_CsPins) / sizeof(int); // Anzahl CS Pins
-const int m_PsuCalibration = 228.20;             // calibration factor for used 9VAC PSU
+const int m_PsuCalibration = 228.20;                    // calibration factor for used 9VAC PSU
+const unsigned long m_MeasureInterval = 1 * 1000;       // ms, Intervall der Messungen
+unsigned long m_LastMeasureTime = 0;                    // letzte Messung
+unsigned int m_curMeasurePort = 1;                         // zuletzt gemessener Pin
+const unsigned long m_MeasureDuration = 20 * 1000;      // 20k µs, 50Hz = 20ms pro Welle
 
 // ######## LCD display
-LiquidCrystal_I2C m_Lcd(0x27, 2, 1, 0, 4, 5, 6, 7, 3, POSITIVE);
-String m_LcdLine1, m_LcdLine2 = "";
-bool m_LcdLineComplete = false;
+//LiquidCrystal_I2C m_Lcd(0x27, 2, 1, 0, 4, 5, 6, 7, 3, POSITIVE);
+//String m_LcdLine1, m_LcdLine2 = "";
+//bool m_LcdLineComplete = false;
 
 // ######## WiFi / networking
-SoftwareSerial m_WifiPort(2, 3); 
-char m_Ssid[] = "Troubadix";            // your network SSID (name)
-char m_Pass[] = "PsWlanKey";        // your network password
-int m_NetStatus = WL_IDLE_STATUS;     // the Wifi radio's status
-WiFiEspClient m_NetClient;
+SoftwareSerial m_WifiPort(2, 3);
+char m_Ssid[] = "Troubadix";         // your network SSID (name)
+char m_Pass[] = "PsWlanKey";         // your network password
+int m_NetStatus = WL_IDLE_STATUS;    // the Wifi radio's status
+WiFiClient m_NetClient;              // WiFi client
+bool m_NetClientIsConnected = false; // the client's connection status
 
-void setup()  
+void setup()
 {
   // setup Serial for debugging
   Serial.begin(9600); //same speed as ESP chip to send commands between ESP and Serial Monitor
-  while (!Serial) 
+  while (!Serial)
     delay(10);
 
-  // setup WiFi
-  m_WifiPort.begin(9600); // or 115200 if your ESP can only communicate at that speed
-  while (!m_WifiPort) 
-    delay(10);
+  // setupWifi();
 
-  WiFi.init(&m_WifiPort);
-  
-  if (WiFi.status() == WL_NO_SHIELD) {
-    Serial.println("WiFi chip not present, not continuing");
-    while (true);
-  }
-  else
-    Serial.println("WiFi chip found.");
+  // connectWiFi();
 
-  connectWiFi();
-    
   // setup power measurement
   setupSPIandADCs(m_CsPins, m_CntCsPins);
-  
-  // setup LCD
-  m_Lcd.begin(16, 2); 
-  m_Lcd.home();
-  m_Lcd.noBlink();
 
-  sendHttpRequest("home.parnigoni.net", true);
+  // setup LCD
+  //  m_Lcd.begin(16, 2);
+  //  m_Lcd.home();
+  //  m_Lcd.noBlink();
+
+  //const char *server = "home.parnigoni.net";
+  //sendHttpRequest(server);
 }
 
-void loop() 
+void loop()
 {
-
-/*  
-  if (m_WifiPort.available()) 
-  {
-    char c = m_WifiPort.read();
-    Serial.write(c);
-  }
-*/
-  
   if (Serial.available())
   {
     char c = Serial.read();
     m_WifiPort.write(c);
   }
 
-  if (m_NetClient.available()) 
-  {
-    Serial.write(m_NetClient.read());
-  }
-  
+  //setupWifi();
+  //handleWiFi();
 
-  if ((micros() - m_LastMeasureTime) < m_MeasureInterval)
-  {
-    // do power measurements
-    float voltage;
-    int power1, power2, power3;
-  
-    voltage = getAdcVoltage(10, 6, m_MeasureDuration, m_PsuCalibration);
-    power1 = getAdcPower(9, 2, m_MeasureDuration, 100, 2000, voltage);
-    power2 = getAdcPower(8, 4, m_MeasureDuration, 220, 2000, voltage);
-    power3 = getAdcPower(7, 0, m_MeasureDuration, 220, 2000, voltage);
-  
-    Serial.print("V: ");
-    Serial.print(voltage, 2);
-    Serial.print(" W1: ");
-    Serial.print(power1);
-    Serial.print(" W2: ");
-    Serial.print(power2);
-    Serial.print(" W3: ");
-    Serial.print(power3);
-    Serial.println();
-  }
-
+  handlePower();
 }
 
 // ################# WiFi stuff #################
 
-void connectWiFi() 
+void handleWiFi()
 {
-  // attempt to connect to WiFi network
-  while ( m_NetStatus != WL_CONNECTED) {
-    Serial.print(F("Attempting to connect to WPA SSID: "));
-    Serial.println(m_Ssid);
-    
-    // Connect to WPA/WPA2 network
-    m_NetStatus = WiFi.begin(m_Ssid, m_Pass);
-    
-    Serial.print(F("connectWiFi(): Connection status: "));
-    Serial.println(m_NetStatus);
+  while (m_NetClient.available())
+  {
+    char c = m_NetClient.read();
+    Serial.write(c);
   }
 
+  // if the server's disconnected, stop the client
+  if (m_NetClientIsConnected && !m_NetClient.connected())
+  {
+    Serial.println();
+    Serial.println("disconnecting from server.");
+    m_NetClient.stop();
+    m_NetClientIsConnected = false;
+  }
+}
+
+void setupWifi()
+{
+  // setup WiFi
+  m_WifiPort.begin(9600); // or 115200 if your ESP can only communicate at that speed
+  while (!m_WifiPort)
+    delay(10);
+
+  WiFi.init(m_WifiPort);
+
+  if (WiFi.status() == WL_NO_MODULE)
+  {
+    Serial.println("WiFi chip not present, not continuing");
+    while (true)
+      ;
+  }
+  else
+    Serial.println("WiFi chip found.");
+}
+
+void connectWiFi()
+{
+  Serial.print(F("connectWiFi(): Attempting to connect to WPA SSID: "));
+  Serial.print(m_Ssid);
+
+  // Connect to network
+  m_NetStatus = WiFi.begin(m_Ssid, m_Pass);
+  while (m_NetStatus != WL_CONNECTED)
+  {
+    delay(1000);
+    Serial.print(".");
+  }
+  Serial.println();
+  Serial.print(F("connectWiFi(): Connected, status: "));
+  Serial.println(m_NetStatus);
+
   // print the received signal strength
-  long rssi = WiFi.RSSI();  
-  Serial.print(F("You're connected to the network, signal strength: "));
-  Serial.println(rssi); 
+  long rssi = WiFi.RSSI();
+  Serial.print(F("connectWiFi(): connected to the network, signal strength: "));
+  Serial.print(rssi);
+  Serial.println(" dBm");
 }
 
 // this method makes a HTTP connection to the server
-void sendHttpRequest(char server[], bool ssl)
+void sendHttpRequest(const char *server)
 {
   Serial.println();
-    
+
   // close any connection before send a new request
   // this will free the socket on the WiFi shield
   m_NetClient.stop();
+  m_NetClientIsConnected = false;
 
   // if there's a successful connection
-  bool result;
-  if (ssl)
-    result = m_NetClient.connectSSL(server, 443);
-  else
-    result = m_NetClient.connect(server, 80);
-
-  if (result)
+  if (m_NetClient.connect(server, 80))
   {
     Serial.println("Connected...");
-    
-    // send the HTTP PUT request
+    m_NetClientIsConnected = true;
+
+    // send the HTTP request
     m_NetClient.println(F("GET / HTTP/1.1"));
     m_NetClient.print(F("Host: "));
     m_NetClient.println(server);
-    m_NetClient.println(F("Connection: close"));
+    m_NetClient.println(F("Connection: Close"));
     m_NetClient.println();
-
+    m_NetClient.flush();
   }
-  else 
+  else
   {
-    // if you couldn't make a connection
     Serial.println(F("Connection failed"));
   }
 }
 
-/*
- * AT commands for ESP8266
- * Quelle: https://docs.espressif.com/projects/esp-at/en/latest/AT_Command_Set/TCP-IP_AT_Commands.html
- * ATE0/ATE1 Enable/Disable echo
- * AT+CWMODE=1 WiFi Mode=Station
- * AT+CWJAP="Troubadix","PsWlanKey" Connect to AP
- * AT+CWDHCP=1,0 Enable DHCP (en=0/1)
- * AT+CIPSTA=ip Set IP
- * AT+CIFSR Get IP
- * AT+CIPSTATUS Connection Status
- * AT+CIPDOMAIN="home.parnigoni.net" DNS resolve:
- * AT+PING="8.8.8.8" Ping:
- * AT+CIPSTART=id,TCP,addr,port Connection aufbauen
- * AT+RST Reset
- * AT+CWAUTOCONN=0 Disable autoconnect, automatic connection can create problems during initialization phase at next boot
- */
-
 // ################# POWER stuff #################
-   
- /*
+
+void handlePower()
+{
+  // do power measurements
+  if ((millis() - m_LastMeasureTime) > m_MeasureInterval)
+  {
+    m_LastMeasureTime = millis();
+    
+    // 0x1 (00|01) to 0xF (11|11) -> 4x chip | 4x pin 
+    int csPin = m_curMeasurePort >> 2; // extraxt chip
+    int adcPin = m_curMeasurePort & 3; // extract pin
+
+    float voltage;
+    int power;
+
+    Serial.print("Measuring: Chip: ");
+    Serial.print(m_CsPins[csPin]);
+    Serial.print(", Pin: ");
+    Serial.print(adcPin);
+ 
+    voltage = getAdcVoltage(m_CsPins[0], 0, m_MeasureDuration, m_PsuCalibration);
+    power = getAdcPower(m_CsPins[csPin], adcPin, m_MeasureDuration, 220, 2000, voltage);
+
+    Serial.print(" V: ");
+    Serial.print(voltage, 2);
+    Serial.print(" W1: ");
+    Serial.print(power);
+    Serial.println();
+
+    m_curMeasurePort++;
+    if (m_curMeasurePort & 16) 
+      m_curMeasurePort = 1; // start over at port 1 (port 0 = voltage)
+  }
+}
+
+/*
  * setup the SPI bus and the CS pins
  *  csPins: array containing the cs pin numbers on the arduino
  * 
@@ -190,7 +200,7 @@ void sendHttpRequest(char server[], bool ssl)
  */
 void setupSPIandADCs(const int csPins[], int countCsPins)
 {
-  SPI.begin();              // init the SPI bus
+  SPI.begin(); // init the SPI bus
   for (int i = 0; i < countCsPins; i++)
   {
     pinMode(csPins[i], OUTPUT);    // set CS pin to output
@@ -198,7 +208,6 @@ void setupSPIandADCs(const int csPins[], int countCsPins)
   }
   delay(1);
 }
-
 
 /*
  * Get Reading from ADC and convert to Voltage
@@ -211,32 +220,32 @@ void setupSPIandADCs(const int csPins[], int countCsPins)
  */
 float getAdcVoltage(int csPin, int adcPin, unsigned long measureDuration, float calibration)
 {
-  unsigned long lsbValue = 610351;      // 1 bit in nV (=5V/2^13)
+  unsigned long lsbValue = 610351; // 1 bit in nV (=5V/2^13)
   unsigned long voltage = 0;
   float primVoltage = 0;
-  bool debug = false;                     // print debug output
+  bool debug = false; // print debug output
 
-  #ifdef DEBUG
-    debug = true;
-  #endif
-  
+#ifdef DEBUG
+  debug = true;
+#endif
+
   int adcVal = readAdcRms(csPin, adcPin, measureDuration);
 
   // strange order to maximize accuracy (max_val = 2^32)
-  voltage = adcVal* lsbValue;           // reading in nV
-  voltage /= 1000000;                   // conv to mV
-  primVoltage = voltage * calibration;  // upscale to primary
-  primVoltage /= 1000;                  // conv to V
-  
+  voltage = adcVal * lsbValue;         // reading in nV
+  voltage /= 1000000;                  // conv to mV
+  primVoltage = voltage * calibration; // upscale to primary
+  primVoltage /= 1000;                 // conv to V
+
   if (debug)
   {
     Serial.print("getAdcVoltage() Res: ");
     Serial.print(adcVal);
     Serial.print(" V: ");
     Serial.print(primVoltage);
-    Serial.println();    
+    Serial.println();
   }
-  
+
   return primVoltage;
 }
 
@@ -251,15 +260,15 @@ float getAdcVoltage(int csPin, int adcPin, unsigned long measureDuration, float 
  *  
  * Return: Power in W 
  */
-int getAdcPower(int csPin, int adcPin, unsigned long measureDuration, int shuntOhms, int turns, int voltage) 
+int getAdcPower(int csPin, int adcPin, unsigned long measureDuration, int shuntOhms, int turns, int voltage)
 {
   unsigned long power = 0;
-  unsigned long lsbValue = 610351;      // 1 bit in nV (=5V/2^13)
-  bool debug = false;                   // print debug output
+  unsigned long lsbValue = 610351; // 1 bit in nV (=5V/2^13)
+  bool debug = false;              // print debug output
 
-  #ifdef DEBUG
-    debug = true;
-  #endif
+#ifdef DEBUG
+  debug = true;
+#endif
 
   if (shuntOhms == 0)
   {
@@ -271,28 +280,27 @@ int getAdcPower(int csPin, int adcPin, unsigned long measureDuration, int shuntO
   int adcVal = readAdcRms(csPin, adcPin, measureDuration);
 
   // strange order to maximize accuracy (max_val = 2^32)
-                                  //                  approx. calc                        exact calc
-  power = (adcVal * lsbValue);    // convert to nV;   46 * 610.351 = 28.076.146           46 * 610.351 = 28.076.146 
-  power /= shuntOhms;             // conv to sek A    28.076.146 / 220 = 127.618,8454     28.076.146 / 220,8 = 127.156,4583333333
-  power /= 1000;                  //                  127.618 / 1000 = 127                127.156,4583333333 / 1000 = 127,1564583333
-  power *= turns;                 // conv to prim A   127 * 2000 = 254.000                127,1564583333 * 2000 = 254.312,9166666
-  power /= 1000;                  //                  254.000 / 1000 = 254                254.312,9166666 / 1000 = 254,3129166666
-  power *= voltage;               // conv to W(rms)   254 * 229 = 58.166                  254,3129166666 * 229,11 = 58.265,6323374847
-  power /= 1000;                  //                  58.166 / 1000 = 58  <-- 99,5% -->   58.265,6323374847 / 1000 = 58,26
-                                  //                                      absolute Error is between 0 and 3W
-  
+  //                  approx. calc                        exact calc
+  power = (adcVal * lsbValue); // convert to nV;   46 * 610.351 = 28.076.146           46 * 610.351 = 28.076.146
+  power /= shuntOhms;          // conv to sek A    28.076.146 / 220 = 127.618,8454     28.076.146 / 220,8 = 127.156,4583333333
+  power /= 1000;               //                  127.618 / 1000 = 127                127.156,4583333333 / 1000 = 127,1564583333
+  power *= turns;              // conv to prim A   127 * 2000 = 254.000                127,1564583333 * 2000 = 254.312,9166666
+  power /= 1000;               //                  254.000 / 1000 = 254                254.312,9166666 / 1000 = 254,3129166666
+  power *= voltage;            // conv to W(rms)   254 * 229 = 58.166                  254,3129166666 * 229,11 = 58.265,6323374847
+  power /= 1000;               //                  58.166 / 1000 = 58  <-- 99,5% -->   58.265,6323374847 / 1000 = 58,26
+                               //                                      absolute Error is between 0 and 3W
+
   if (debug)
   {
     Serial.print("getAdcPower() Res: ");
     Serial.print(adcVal);
     Serial.print(" Power: ");
     Serial.print(power);
-    Serial.println();    
+    Serial.println();
   }
 
-  return int(power);              // Power in W
+  return int(power); // Power in W
 }
-
 
 /*
  * Get Reading from ADC
@@ -303,19 +311,20 @@ int getAdcPower(int csPin, int adcPin, unsigned long measureDuration, int shuntO
  */
 int readAdc(int csPin, int adcPin)
 {
-  int adcValue = 0;                       // nimmt den Messwert vom ADC auf
-  byte hi, lo, sign = 0;                  // results of ADC reads
+  int adcValue = 0;      // nimmt den Messwert vom ADC auf
+  byte hi, lo, sign = 0; // results of ADC reads
 
-  digitalWrite(csPin, LOW);             // turn on chipselect
-  SPI.transfer(0x08 | (adcPin >> 1));   // send: 4x null, startbit, DIFF = 0, 2 Channelbits (D2, D1); return: uninteressant
-  hi = SPI.transfer(adcPin << 7);       // send: lowest Channelbit (D0), rest dont care; return: 2 undef, nullbit, Signbit, 4 highest databits
-  lo = SPI.transfer(0x00);              // send: dont care; return: 8 lowest databits
-  digitalWrite(csPin, HIGH);            // turn off chipselect
-  sign = hi & 0x10;                     // extract Sign Bit for DIFF
-  adcValue = ((hi & 0x0F) << 8) + lo;   // combine the 2 return Values
+  adcPin *= 2;                        // 4 adcPins are 0, 2, 4, 6
+  digitalWrite(csPin, LOW);           // turn on chipselect
+  SPI.transfer(0x08 | (adcPin >> 1)); // send: 4x null, startbit, DIFF = 0, 2 Channelbits (D2, D1); return: uninteressant
+  hi = SPI.transfer(adcPin << 7);     // send: lowest Channelbit (D0), rest dont care; return: 2 undef, nullbit, Signbit, 4 highest databits
+  lo = SPI.transfer(0x00);            // send: dont care; return: 8 lowest databits
+  digitalWrite(csPin, HIGH);          // turn off chipselect
+  sign = hi & 0x10;                   // extract Sign Bit for DIFF
+  adcValue = ((hi & 0x0F) << 8) + lo; // combine the 2 return Values
 
-  if (sign) 
-    adcValue -= 4096;                   // if signbit is set, range is 0xFFF = -1 to 0x000 = -4096
+  if (sign)
+    adcValue -= 4096; // if signbit is set, range is 0xFFF = -1 to 0x000 = -4096
 
   return adcValue;
 }
@@ -331,23 +340,22 @@ int readAdc(int csPin, int adcPin)
 int readAdcRms(int csPin, int adcPin, unsigned long measureDuration)
 {
   unsigned long startTime = micros();
-  int count = 0;                          // Anzahl der Messungen
-  int adcValue = 0;                       // nimmt den Messwert vom ADC auf
-  unsigned long adcRms = 0;               // nimmt die quadrierten Summen der gesamten Periode auf
-  bool debug = false;                     // print debug output
+  int count = 0;            // Anzahl der Messungen
+  int adcValue = 0;         // nimmt den Messwert vom ADC auf
+  unsigned long adcRms = 0; // nimmt die quadrierten Summen der gesamten Periode auf
+  bool debug = false;       // print debug output
 
-  #ifdef DEBUG
-    debug = true;
-  #endif
+#ifdef DEBUG
+  debug = true;
+#endif
 
   SPI.beginTransaction(SPISettings(1700000, MSBFIRST, SPI_MODE0)); // max 1,7MHz for MCP3304
-  do 
+  do
   {
     adcValue = readAdc(csPin, adcPin);
-    adcRms += (unsigned long)adcValue * (unsigned long)adcValue;  // calculate square
-    count++;                                                      
-  } 
-  while ((micros() - startTime) < measureDuration);
+    adcRms += (unsigned long)adcValue * (unsigned long)adcValue; // calculate square
+    count++;
+  } while ((micros() - startTime) < measureDuration);
 
   SPI.endTransaction();
 
@@ -357,8 +365,8 @@ int readAdcRms(int csPin, int adcPin, unsigned long measureDuration)
       Serial.println(F("##### ERROR readAdcRms(): count=0, div/0!"));
     return 0;
   }
-  
-  adcRms = sqrt(adcRms / count);          // -> quadratischer Mittelwert
+
+  adcRms = sqrt(adcRms / count); // -> quadratischer Mittelwert
 
   int ret = adcRms;
   if (ret < 4)
@@ -368,7 +376,7 @@ int readAdcRms(int csPin, int adcPin, unsigned long measureDuration)
     if (debug)
       Serial.println(F("####### ATTENTION, readAdcRms() return value set to 0 because low val read (probably noise)!"));
   }
-  
+
   if (debug)
   {
     Serial.print("readAdcRms(");
@@ -387,7 +395,7 @@ int readAdcRms(int csPin, int adcPin, unsigned long measureDuration)
 }
 
 // ################# LCD stuff #################
-
+/*
 void writeLCD(char c)
 {
   if (c > 31)
@@ -409,3 +417,4 @@ void writeLCD(char c)
   if (c == 10)
      m_LcdLineComplete = true;  
 }
+*/

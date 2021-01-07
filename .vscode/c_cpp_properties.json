@@ -17,7 +17,7 @@
                 "ARDUINO=10813",
                 "ARDUINO_AVR_UNO",
                 "ARDUINO_ARCH_AVR",
-                "WIFIESPAT_LOG_LEVEL=LOG_LEVEL_SILENT"
+                "WIFIESPAT_LOG_LEVEL=LOG_LEVEL_WARN"
             ],
             "macFrameworkPath": [
                 "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/System/Library/Frameworks"

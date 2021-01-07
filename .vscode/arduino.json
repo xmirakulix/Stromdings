@@ -2,5 +2,6 @@
     "programmer": "AVRISP mkII",
     "board": "arduino:avr:uno",
     "port": "/dev/tty.usbmodem14401",
-    "sketch": "Stromdings.ino"
+    "sketch": "Stromdings.ino",
+    "output": "./build"
 }
