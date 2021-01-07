@@ -5,12 +5,20 @@
             "includePath": [
                 "/Applications/Arduino.app/Contents/Java/tools/**",
                 "/Users/flo/Documents/Arduino/libraries/**",
+                "/Users/flo/Documents/Arduino/libraries/WiFiEspAT/src",
                 "/Applications/Arduino.app/Contents/Java/libraries/**",
                 "/Applications/Arduino.app/Contents/Java/hardware/tools/**",
                 "/Applications/Arduino.app/Contents/Java/hardware/arduino/avr/**",
                 "${workspaceFolder}/**"
             ],
-            "defines": [],
+            "defines": [
+                "USBCON",
+                "F_CPU=16000000L",
+                "ARDUINO=10813",
+                "ARDUINO_AVR_UNO",
+                "ARDUINO_ARCH_AVR",
+                "WIFIESPAT_LOG_LEVEL=LOG_LEVEL_SILENT"
+            ],
             "macFrameworkPath": [
                 "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/System/Library/Frameworks"
             ],
