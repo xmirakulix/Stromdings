@@ -1,16 +1,16 @@
-#include <SoftwareSerial.h>
-#include <WiFiEspAT.h>
+#include "./src/AltSoftSerial/AltSoftSerial.h"
+#include "./src/WiFiEspAT/src/WiFiEspAT.h"
 
 #include <SPI.h>
 
 #include <Wire.h>
-#include <hd44780.h>                       // main hd44780 header
-#include <hd44780ioClass/hd44780_I2Cexp.h> // i2c expander i/o class header
+#include "src/hd44780/hd44780.h"                       // main hd44780 header
+#include "src/hd44780/hd44780ioClass/hd44780_I2Cexp.h" // i2c expander i/o class header
 
 // #define DEBUG // toggle Debug Output
 
 // ######## Power measurement
-const int m_CsPins[] = {7, 8, 9, 10};                   // list of CS pins
+const int m_CsPins[] = {4, 5, 6, 7};                   // list of CS pins
 const int m_CntCsPins = sizeof(m_CsPins) / sizeof(int); // Anzahl CS Pins
 const int m_PsuCalibration = 228.20;                    // calibration factor for used 9VAC PSU
 const unsigned long m_MeasureInterval = 1 * 1000;       // ms, Intervall der Messungen
@@ -19,18 +19,22 @@ unsigned int m_curMeasurePort = 1;                      // zuletzt gemessener Pi
 const unsigned long m_MeasureDuration = 20 * 1000;      // 20k µs, 50Hz = 20ms pro Welle
 
 // ######## LCD display
-//LiquidCrystal_I2C m_Lcd(0x27, 2, 1, 0, 4, 5, 6, 7, 3, POSITIVE);
 hd44780_I2Cexp m_Lcd; // declare lcd object: auto locate & auto config expander chip
-//String m_LcdLine1, m_LcdLine2 = "";
-//bool m_LcdLineComplete = false;
 
 // ######## WiFi / networking
-SoftwareSerial m_WifiPort(2, 3);
-char m_Ssid[] = "Troubadix";         // your network SSID (name)
-char m_Pass[] = "PsWlanKey";         // your network password
-int m_NetStatus = WL_IDLE_STATUS;    // the Wifi radio's status
-WiFiClient m_NetClient;              // WiFi client
-bool m_NetClientIsConnected = false; // the client's connection status
+AltSoftSerial m_WifiPort(8,9);        // must be 8 and 9 (ISR in library)
+char m_Ssid[] = "Troubadix";          // your network SSID (name)
+char m_Pass[] = "PsWlanKey";          // your network password
+int m_NetStatus = WL_IDLE_STATUS;     // the Wifi radio's status
+WiFiClient m_NetClient;               // WiFi client
+bool m_NetClientIsConnected = false;  // the client's connection status
+
+// ######## rotary encoder
+const int m_RotInput = 0; // Pin A0 is used to actually read the encoder values
+int m_RotValue = 0;       // Variable to store the analog values read from the encoder
+char m_RotResult = (' '); // contains the interpreted result
+
+// ################# Main stuff #################
 
 void setup()
 {
@@ -44,20 +48,25 @@ void setup()
   connectWiFi();
 
   // setup power measurement
-  setupSPIandADCs(m_CsPins, m_CntCsPins);
+  setupPower(m_CsPins, m_CntCsPins);
 
   // setup LCD
   setupLcd();
 
-  const char *server = "home.parnigoni.net";
-  sendHttpRequest(server);
+  // setup the rotary ecoder
+  setupRotary();
+
+  // const char *server = "home.parnigoni.net";
+  // sendHttpRequest(server);
 }
 
 void loop()
 {
-  handleWiFi();
+  // handleWiFi();
 
   handlePower();
+
+  handleEncoder();
 }
 
 // ################# WiFi stuff #################
@@ -84,8 +93,6 @@ void setupWifi()
 {
   // setup WiFi
   m_WifiPort.begin(9600); // or 115200 if your ESP can only communicate at that speed
-  while (!m_WifiPort)
-    delay(10);
 
   WiFi.init(m_WifiPort);
 
@@ -194,7 +201,7 @@ void handlePower()
  * 
  * Return: none
  */
-void setupSPIandADCs(const int csPins[], int countCsPins)
+void setupPower(const int csPins[], int countCsPins)
 {
   SPI.begin(); // init the SPI bus
   for (int i = 0; i < countCsPins; i++)
@@ -393,39 +400,52 @@ void setupLcd()
     Serial.print(F("setupLcd(): LCD initialized...")
 #endif
 
-  writeLCD();
-}
-
-void writeLCD()
-{
-
   m_Lcd.lineWrap();
   m_Lcd.clear();
-  m_Lcd.print("WrapTest");
-  delay(2000);
-  m_Lcd.clear();
+  m_Lcd.print("Very very very very long text");
+  m_Lcd.noCursor();
+}
 
-  //print the configured LCD geometry
-  m_Lcd.print(16);
-  m_Lcd.print("x");
-  m_Lcd.print(2);
-  delay(3000);
-  m_Lcd.clear();
 
-  m_Lcd.print("This is a very long line of text");
-  delay(3000);
-  m_Lcd.clear();
+// ################# rotary encoder stuff #################
 
-  m_Lcd.cursor(); // turn on cursor so you can see where it is
-  char c = '0'; // start at the character for the number zero
-  for (int i = 2 * 16 * 1; i; i--)
+void setupRotary()
+{
+
+  pinMode(m_RotInput, INPUT); // Define A0 as Analog input
+
+  unsigned int intr_state = SREG;
+  cli();
+  PCICR |= (1 << PCIE1);   // PCIE1: Pin Change Interrupt Enable group 1
+  PCMSK1 |= (1 << PCINT8); // Enable Pin Change Interrupt for A0
+	SREG = intr_state;
+}
+
+
+// show_encoder() Subroutine to read the Encoder values
+void handleEncoder()
+{
+  if (m_RotResult != ' ')
   {
-    m_Lcd.print(c++);
-    delay(200); // slow things down to watch the printing & wrapping
-
-    if (c > 0x7e) // wrap back to beginning of printable ASCII chars
-      c = '!';
+    Serial.println(m_RotResult);
+    m_RotResult = ' ';
   }
-  delay(3000);
-  m_Lcd.noCursor(); // turn off cursor
+}
+
+// Interrupt Service Routine to read the Encoder values
+// Using an interrupt routine to avoid slowing down the main program, since no polling is neccesary
+ISR(PCINT1_vect)
+{
+  m_RotResult = (' ');
+
+  // read average value
+  m_RotValue = (analogRead(m_RotInput) + analogRead(m_RotInput) + analogRead(m_RotInput) + analogRead(m_RotInput)) / 4;
+
+  // gaps between value-windows to avoid mis-reading
+  if (m_RotValue > 590 && m_RotValue < 630)
+    m_RotResult = ('B'); // press button
+  if (m_RotValue > 670 && m_RotValue < 710)
+    m_RotResult = ('R'); // turn right
+  if (m_RotValue > 780 && m_RotValue < 820)
+    m_RotResult = ('L'); // turn left
 }
