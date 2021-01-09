@@ -1,3 +1,9 @@
 [submodule "src/hd44780"]
 	path = src/hd44780
 	url = https://github.com/duinoWitchery/hd44780.git
+[submodule "src/WiFiEspAT"]
+	path = src/WiFiEspAT
+	url = https://github.com/xmirakulix/WiFiEspAT.git
+[submodule "src/AltSoftSerial"]
+	path = src/AltSoftSerial
+	url = https://github.com/xmirakulix/AltSoftSerial.git
