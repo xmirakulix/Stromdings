@@ -179,7 +179,9 @@ void sendHttpRequest(const char* server)
 
 void handlePower()
 {
+#ifdef DEBUG
   m_PowerHandlerDuration = millis();
+#endif
 
   // do power measurements
   if ((millis() - m_LastMeasureTime) > m_MeasureInterval)
@@ -433,7 +435,9 @@ void setupLcd()
 
 void handleLcd()
 {
+#ifdef DEBUG
   m_LcdHandlerDuration = millis();
+#endif
 
   if (m_RotResult == 'L')  // rotary turned back
   {
