@@ -53,9 +53,12 @@ char m_RotResult = (' ');  // contains the interpreted result
 void setup()
 {
   // setup Serial for debugging
-  Serial.begin(115200);
+  Serial.begin(9600);
   while (!Serial)
     delay(10);
+
+  // setup the rotary ecoder
+  setupRotary();
 
   // setup LCD
   setupLcd();
@@ -66,9 +69,6 @@ void setup()
 
   // setup power measurement
   setupPower();
-
-  // setup the rotary ecoder
-  setupRotary();
 
   // const char *server = "home.parnigoni.net";
   // sendHttpRequest(server);
@@ -546,10 +546,10 @@ ISR(PCINT1_vect)
   m_RotValue = (analogRead(m_RotInput) + analogRead(m_RotInput) + analogRead(m_RotInput) + analogRead(m_RotInput)) / 4;
 
   // gaps between value-windows to avoid mis-reading
-  if (m_RotValue > 590 && m_RotValue < 630)
+  if (m_RotValue > 630 && m_RotValue < 670)
     m_RotResult = ('B');  // press button
-  if (m_RotValue > 670 && m_RotValue < 710)
+  if (m_RotValue > 710 && m_RotValue < 750)
     m_RotResult = ('R');  // turn right
-  if (m_RotValue > 780 && m_RotValue < 820)
+  if (m_RotValue > 830 && m_RotValue < 870)
     m_RotResult = ('L');  // turn left
 }

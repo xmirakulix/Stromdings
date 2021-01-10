@@ -7,6 +7,11 @@
         "string": "cpp",
         "system_error": "cpp",
         "unordered_map": "cpp",
-        "vector": "cpp"
+        "vector": "cpp",
+        "__bit_reference": "cpp",
+        "array": "cpp",
+        "initializer_list": "cpp",
+        "iterator": "cpp",
+        "string_view": "cpp"
     }
 }
