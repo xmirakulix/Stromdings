@@ -1,6 +1,7 @@
 // WiFi includes
 #include "./src/AltSoftSerial/AltSoftSerial.h"
 #include "./src/WiFiEspAT/src/WiFiEspAT.h"
+#include "WiFiSecret.h"
 
 // power includes
 #include <SPI.h>
@@ -36,9 +37,7 @@ unsigned long m_LastBacklightOn = 0;  // time of last backlight on
 bool m_IsLcdBacklight = true;         // is the backlight on?
 
 // ######## WiFi / networking
-AltSoftSerial m_WifiPort(8, 9);       // must be 8 and 9 (ISR in library)
-char m_Ssid[] = "Troubadix";          // your network SSID (name)
-char m_Pass[] = "PsWlanKey";          // your network password
+AltSoftSerial m_WifiPort(8, 9);       // must be 8 and 9 (interrupt used in library)
 int m_NetStatus = WL_IDLE_STATUS;     // the Wifi radio's status
 WiFiClient m_NetClient;               // WiFi client
 bool m_NetClientIsConnected = false;  // the client's connection status
