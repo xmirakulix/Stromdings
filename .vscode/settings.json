@@ -12,6 +12,13 @@
         "array": "cpp",
         "initializer_list": "cpp",
         "iterator": "cpp",
-        "string_view": "cpp"
+        "string_view": "cpp",
+        "locale": "cpp",
+        "ostream": "cpp",
+        "list": "cpp",
+        "algorithm": "cpp",
+        "bitset": "cpp",
+        "memory": "cpp",
+        "optional": "cpp"
     }
 }
