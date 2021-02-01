@@ -6,6 +6,9 @@
 // power includes
 #include <SPI.h>
 
+// MQTT setup
+#include <PubSubClient.h>
+
 // LCD includes
 #include <Wire.h>
 #include "src/hd44780/hd44780.h"                        // main hd44780 header
@@ -16,6 +19,9 @@
 unsigned long m_PowerHandlerDuration = 0;  // store the duation of last handler run
 unsigned long m_LcdHandlerDuration = 0;    // store the duation of last handler run
 #endif
+
+// ######## general vars
+const char m_DeviceId[] = "118216a85f90b243b29f0eaf30e424ef";  // md5(Stromdings)
 
 // ######## Power measurement
 const int m_CsPins[] = {4, 5, 6, 7};                  // list of ADC Chip-Select pins
@@ -41,6 +47,10 @@ AltSoftSerial m_WifiPort(8, 9);       // must be 8 and 9 (interrupt used in libr
 int m_NetStatus = WL_IDLE_STATUS;     // the Wifi radio's status
 WiFiClient m_NetClient;               // WiFi client
 bool m_NetClientIsConnected = false;  // the client's connection status
+
+// ######## MQTT client
+PubSubClient m_MqttClient(m_NetClient);       // the WiFi client
+const char m_MqttBroker[] = "homeassistant";  // the broker to which the MQTT topics are published
 
 // ######## rotary encoder
 const int m_RotInput = 0;     // Pin A0 is used
@@ -68,6 +78,8 @@ void setup()
   // setup and connect WiFi
   setupWifi();
   connectWiFi();
+
+  setupMqtt();
 
   // setup power measurement
   setupPower();
@@ -203,6 +215,29 @@ void sendHttpRequest(const char* server)
   else
   {
     Serial.println(F("Connection failed"));
+  }
+}
+
+void setupMqtt()
+{
+  m_MqttClient.setServer(m_MqttBroker, 1883);
+
+  if (m_MqttClient.connect("Stromdings", "mosquitto", "mosquitto"))
+  {
+    m_Lcd.print("MQTT connected");
+
+    // 74 chars: { "id": "118216a85f90b243b29f0eaf30e424ef", "status": "startup complete" }
+    char msg[100];
+    strcpy(msg, "{ \"id\": \"");
+    strcat(msg, m_DeviceId);
+    strcat(msg, "\", \"status\": \"startup complete\" }");
+
+    m_MqttClient.publish("/Stromdings/device", msg);
+  }
+  else
+  {
+    Serial.print("MQTT error: ");
+    Serial.println(m_MqttClient.state());
   }
 }
 
