@@ -6,8 +6,8 @@
 // power includes
 #include <SPI.h>
 
-// MQTT setup
-#include <PubSubClient.h>
+// MQTT includes
+#include "./src/PubSubClient/src/PubSubClient.h"
 
 // LCD includes
 #include <Wire.h>
@@ -45,8 +45,7 @@ WiFiClient m_NetClient;               // WiFi client
 bool m_NetClientIsConnected = false;  // the client's connection status
 
 // ######## MQTT client
-PubSubClient m_MqttClient(m_NetClient);       // the WiFi client
-const char m_MqttBroker[] = "homeassistant";  // the broker to which the MQTT topics are published
+PubSubClient m_MqttClient(m_NetClient);  // the WiFi client
 
 // ######## rotary encoder
 const uint8_t m_RotInput = 0;     // Pin A0 is used
@@ -99,9 +98,6 @@ void handleWiFi()
   // WiFi must be read or link is blocked forever
   while (m_NetClient.available())
     m_NetClient.read();
-
-  if ((millis() % (5 * 1000)) == 0)
-    sendHttpRequest("home.parnigoni.net");
 
   // if disconnected, stop the client
   if (m_NetClientIsConnected && !m_NetClient.connected())
@@ -209,26 +205,109 @@ void sendHttpRequest(const char* server)
   }
 }
 
+/**
+ * MQTT topics for autodiscovery by Home Assistant:
+ *   homeassistant/sensor/<Pxx>/config -> 
+ *          {
+ *              "dev_cla": "power",
+ *              "stat_t": "homeassistant/sensor/P16/state",
+ *              "unit_of_meas": "W",
+ *              "uniq_id": "Stromdings_P16",
+ *              "name": "Stromdings P6",
+ *              "dev": {
+ *                  "ids": [ "Stromdings" ],
+ *                  "name": "Stromdings"
+ *              }
+ *          }
+ *   homeassistant/sensor/<Pxx>/state -> <measured_watts>
+ */
+
 void setupMqtt()
 {
-  m_MqttClient.setServer(m_MqttBroker, 1883);
+  m_MqttClient.setServer("homeassistant", 1883);
 
   if (m_MqttClient.connect("Stromdings", "mosquitto", "mosquitto"))
   {
-    m_Lcd.print("MQTT connected");
+    m_Lcd.clear();
+    m_Lcd.print(F("MQTT connected"));
+    m_Lcd.setCursor(0, 1);
 
-    // 74 chars: { "id": "118216a85f90b243b29f0eaf30e424ef", "status": "startup complete" }
-    char msg[100];
-    strcpy(msg, "{ \"id\": \"");
-    strcat(msg, m_DeviceId);
-    strcat(msg, "\", \"status\": \"startup complete\" }");
+    // 31 chars: homeassistant/sensor/Pxx/config (maxint)
+    // 181 chars: {"dev_cla":"power","stat_t":"homeassistant/sensor/Pxx/state","unit_of_meas":"W","uniq_id":"Stromdings_Pxx","name":"Stromdings Pxx","dev":{"ids":["Stromdings"],"name":"Stromdings"}}
 
-    m_MqttClient.publish("/Stromdings/device", msg);
+    char portnum[5];
+    char topic[35];
+    char msg[185];
+
+    for (uint8_t i = 1; i <= m_NumPorts; i++)
+    {
+      itoa(i, portnum, 10);
+
+      strcpy(topic, "homeassistant/sensor/P");
+      strcat(topic, portnum);
+      strcat(topic, "/config");
+
+      strcpy(msg, "{");
+      strcat(msg, "\"dev_cla\":\"power\",");
+      strcat(msg, "\"stat_t\":\"homeassistant/sensor/P");
+      strcat(msg, portnum);
+      strcat(msg, "/state\",");
+      strcat(msg, "\"unit_of_meas\":\"W\",");
+      strcat(msg, "\"uniq_id\":\"Stromdings_P");
+      strcat(msg, portnum);
+      strcat(msg, "\",");
+      strcat(msg, "\"name\":\"Stromdings P");
+      strcat(msg, portnum);
+      strcat(msg, "\",");
+      strcat(msg, "\"dev\":{\"ids\":[\"Stromdings\"],\"name\":\"Stromdings\"}");
+      strcat(msg, "}");
+
+      if (!m_MqttClient.publish(topic, msg))
+      {
+        m_Lcd.print(F("Startup pub err!"));
+        while (true)
+          ;
+      }
+    }
+
+    m_Lcd.print(F("Startup pub ok"));
+    delay(2000);
   }
   else
   {
-    Serial.print("MQTT error: ");
-    Serial.println(m_MqttClient.state());
+    m_Lcd.print(F("MQTT start error"));
+    m_Lcd.setCursor(0, 1);
+    m_Lcd.print(F("Code: "));
+    m_Lcd.print(m_MqttClient.state());
+    while (true)
+      ;
+  }
+}
+
+// transmit a power measurement via MQTT
+void sendMeasurement(int port)
+{
+  char portnum[12];
+  itoa(port + 1, portnum, 10);
+
+  // 38 chars: homeassistant/sensor/P4294967296/state (maxint)
+  char topic[45];
+  strcpy(topic, "homeassistant/sensor/P");
+  strcat(topic, portnum);
+  strcat(topic, "/state");
+
+  char msg[12];
+  itoa(m_LastMeasurements[port], msg, 10);
+
+  m_Lcd.setCursor(0, 1);
+  if (!m_MqttClient.publish(topic, msg))
+  {
+    m_LastPageChange = millis();  // delay next page change
+    m_Lcd.clear();
+    m_Lcd.print(F("MQTT pub error!"));
+    m_Lcd.setCursor(0, 1);
+    m_Lcd.print(F("Port: P"));
+    m_Lcd.print(port + 1);
   }
 }
 
@@ -272,6 +351,7 @@ void handlePower()
     Serial.println();
 #endif
 
+    sendMeasurement(m_curMeasurePort);
     m_curMeasurePort++;
     if (m_curMeasurePort == m_NumPorts)
       m_curMeasurePort = 0;

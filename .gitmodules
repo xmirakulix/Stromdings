@@ -7,3 +7,6 @@
 [submodule "src/AltSoftSerial"]
 	path = src/AltSoftSerial
 	url = https://github.com/xmirakulix/AltSoftSerial.git
+[submodule "src/pubsubclient"]
+	path = src/pubsubclient
+	url = https://github.com/xmirakulix/pubsubclient.git
