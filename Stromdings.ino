@@ -20,23 +20,19 @@ unsigned long m_PowerHandlerDuration = 0;  // store the duation of last handler 
 unsigned long m_LcdHandlerDuration = 0;    // store the duation of last handler run
 #endif
 
-// ######## general vars
-const char m_DeviceId[] = "118216a85f90b243b29f0eaf30e424ef";  // md5(Stromdings)
-
 // ######## Power measurement
-const int m_CsPins[] = {4, 5, 6, 7};                  // list of ADC Chip-Select pins
-const int m_AdcCnt = sizeof(m_CsPins) / sizeof(int);  // number of ADCs
-const unsigned long m_MeasureInterval = 1 * 1000;     // ms, interval between measurements
-const unsigned long m_MeasureDuration = 20 * 1000;    // 20k µs, 50Hz = 20ms pro Welle
-unsigned long m_LastMeasureTime = 0;                  // time of last measurement
-unsigned int m_curMeasurePort = 0;                    // zuletzt gemessener Pin
-int m_LastMeasurements[(m_AdcCnt * 4)];               // last measurement per port, 4*num of ADCs minus voltage
-int m_Voltage = 230;                                  // last measured voltage
+const uint8_t m_CsPins[] = {4, 5, 6, 7};                      // list of ADC Chip-Select pins
+const uint8_t m_AdcCnt = sizeof(m_CsPins) / sizeof(uint8_t);  // number of ADCs
+const uint8_t m_NumPorts = m_AdcCnt * 4;                      // number of available ports
+unsigned long m_LastMeasureTime = 0;                          // time of last measurement
+uint8_t m_curMeasurePort = 0;                                 // zuletzt gemessener Pin
+uint16_t m_LastMeasurements[m_NumPorts];                      // last measurement per port, 4*num of ADCs minus voltage
+const uint8_t m_Voltage = 230;                                // last measured voltage
 // const int m_PsuCalibration = 228.20;               // calibration factor for used 9VAC PSU
 
 // ######## LCD display
 hd44780_I2Cexp m_Lcd;                 // declare lcd object: auto locate & auto config expander chip
-unsigned int m_LcdCurrentPage = 0;    // which page to display
+uint8_t m_LcdCurrentPage = 0;         // which page to display
 bool m_LcdShowInfoPage = false;       // should we display the info page?
 unsigned long m_LastPageChange = 0;   // time of last page change
 unsigned long m_LastBacklightOn = 0;  // time of last backlight on
@@ -53,11 +49,11 @@ PubSubClient m_MqttClient(m_NetClient);       // the WiFi client
 const char m_MqttBroker[] = "homeassistant";  // the broker to which the MQTT topics are published
 
 // ######## rotary encoder
-const int m_RotInput = 0;     // Pin A0 is used
-const int m_RotIE = PCIE1;    // PCIE1: Pin Change Interrupt Enable group 1
-const int m_RotInt = PCINT8;  // PCINT8: Pin Change Interrupt for A0
-int m_RotValue = 0;           // analog values read from the encoder
-char m_RotResult = (' ');     // contains the interpreted result
+const uint8_t m_RotInput = 0;     // Pin A0 is used
+const uint8_t m_RotIE = PCIE1;    // PCIE1: Pin Change Interrupt Enable group 1
+const uint8_t m_RotInt = PCINT8;  // PCINT8: Pin Change Interrupt for A0
+uint16_t m_RotValue = 0;          // analog values read from the encoder
+char m_RotResult = ' ';           // contains the interpreted result
 unsigned long m_RotLastIRQTime = 0;
 
 // ################# Main stuff #################
@@ -128,18 +124,18 @@ void setupWifi()
 
   if (WiFi.status() == WL_NO_MODULE)
   {
-    m_Lcd.print("No WiFi chip, not continuing");
+    m_Lcd.print(F("No WiFi chip, not continuing"));
     while (true)
       ;
   }
   else
-    m_Lcd.print("WiFi chip found.");
+    m_Lcd.print(F("WiFi chip found."));
 }
 
 void connectWiFi()
 {
   m_Lcd.clear();
-  m_Lcd.print("Connecting: ");
+  m_Lcd.print(F("Connecting: "));
   m_Lcd.print(m_Ssid);
 
   // Connect to network
@@ -148,14 +144,14 @@ void connectWiFi()
     ;
 
   m_Lcd.clear();
-  m_Lcd.print("WiFi connected");
+  m_Lcd.print(F("WiFi connected"));
 
   // print the received signal strength
   long rssi = WiFi.RSSI();
   m_Lcd.setCursor(0, 1);
-  m_Lcd.print("Signal: ");
+  m_Lcd.print(F("Signal: "));
   m_Lcd.print(rssi);
-  m_Lcd.print(" dBm");
+  m_Lcd.print(F(" dBm"));
 
   delay(2000);
 }
@@ -166,16 +162,16 @@ void debugWiFi()
   {
     m_Lcd.print(F("Client running"));
     m_Lcd.setCursor(0, 1);
-    m_Lcd.print(F("Cant print debug"));
+    m_Lcd.print(F("Can't debug WiFi"));
     return;
   }
 
   long rssi = WiFi.RSSI();
-  m_Lcd.print("RSSI:");
+  m_Lcd.print(F("RSSI:"));
   m_Lcd.print(rssi);
 
   bool stat = WiFi.status();
-  m_Lcd.print(" Stat:");
+  m_Lcd.print(F(" Stat:"));
   m_Lcd.print(stat);
 
   m_Lcd.setCursor(0, 1);
@@ -183,7 +179,7 @@ void debugWiFi()
   m_Lcd.print(ip);
 }
 
-// this method makes a HTTP connection to the server
+// make a HTTP connection to a server
 void sendHttpRequest(const char* server)
 {
   Serial.println();
@@ -194,14 +190,9 @@ void sendHttpRequest(const char* server)
     return;
   }
 
-  // close any connection before send a new request
-  // this will free the socket on the WiFi shield
-  // m_NetClient.stop();
-  // m_NetClientIsConnected = false;
-
   if (m_NetClient.connect(server, 80))
   {
-    Serial.println("Connected...");
+    Serial.println(F("Connected..."));
     m_NetClientIsConnected = true;
 
     // send the HTTP request
@@ -249,8 +240,9 @@ void handlePower()
   m_PowerHandlerDuration = millis();
 #endif
 
+  unsigned int measureInterval = 1 * 1000;  // in ms
   // do power measurements
-  if ((millis() - m_LastMeasureTime) > m_MeasureInterval)
+  if ((millis() - m_LastMeasureTime) > measureInterval)
   {
     m_LastMeasureTime = millis();
 
@@ -259,36 +251,36 @@ void handlePower()
     int adcPin = m_curMeasurePort & 3;  // extract pin
 
 #ifdef DEBUG
-    Serial.print("Measuring: Port:");
+    Serial.print(F("Measuring: Port:"));
     Serial.print(m_curMeasurePort);
-    Serial.print(", Chip: ");
+    Serial.print(F(", Chip: "));
     Serial.print(m_CsPins[csPin]);
-    Serial.print(", Pin: ");
+    Serial.print(F(", Pin: "));
     Serial.println(adcPin);
 #endif
 
-    // m_LastVoltage = getAdcVoltage(m_CsPins[0], 0, m_MeasureDuration, m_PsuCalibration);
-    m_LastMeasurements[m_curMeasurePort] = getAdcPower(m_CsPins[csPin], adcPin, m_MeasureDuration, 220, 2000, m_Voltage);
+    int measureDuration = 20 * 1000;  // 20k µs, 50Hz = 20ms pro Welle
+    m_LastMeasurements[m_curMeasurePort] = getAdcPower(m_CsPins[csPin], adcPin, measureDuration, 220, 2000, m_Voltage);
 
 #ifdef DEBUG
-    Serial.print(" V: ");
+    Serial.print(F(" V: "));
     Serial.print(m_Voltage, 2);
-    Serial.print(" W[");
+    Serial.print(F(" W["));
     Serial.print(m_curMeasurePort);
-    Serial.print("]: ");
+    Serial.print(F("]: "));
     Serial.print(m_LastMeasurements[m_curMeasurePort]);
     Serial.println();
 #endif
 
     m_curMeasurePort++;
-    if (m_curMeasurePort == (m_AdcCnt * 4))
+    if (m_curMeasurePort == m_NumPorts)
       m_curMeasurePort = 0;
   }
 
 #ifdef DEBUG
-  Serial.print("Power handler took: ");
+  Serial.print(F("Power handler took: "));
   Serial.print(millis() - m_PowerHandlerDuration);
-  Serial.println("ms");
+  Serial.println(F("ms"));
 #endif
 }
 
@@ -333,9 +325,9 @@ float getAdcVoltage(int csPin, int adcPin, unsigned long measureDuration, float 
   primVoltage /= 1000;                  // conv to V
 
 #ifdef DEBUG
-  Serial.print("getAdcVoltage() Res: ");
+  Serial.print(F("getAdcVoltage() Res: "));
   Serial.print(adcVal);
-  Serial.print(" V: ");
+  Serial.print(F(" V: "));
   Serial.print(primVoltage);
   Serial.println();
 #endif
@@ -379,9 +371,9 @@ int getAdcPower(int csPin, int adcPin, unsigned long measureDuration, int shuntO
   power /= 1000;                //					58.166 / 1000 = 58
 
 #ifdef DEBUG
-  Serial.print("getAdcPower() Res: ");
+  Serial.print(F("getAdcPower() Res: "));
   Serial.print(adcVal);
-  Serial.print(" Power: ");
+  Serial.print(F(" Power: "));
   Serial.print(power);
   Serial.println();
 #endif
@@ -466,15 +458,15 @@ int readAdcRms(int csPin, int adcPin, unsigned long measureDuration)
   }
 
 #ifdef DEBUG
-  Serial.print("readAdcRms(");
+  Serial.print(F("readAdcRms("));
   Serial.print(csPin);
   Serial.print(",");
   Serial.print(adcPin);
-  Serial.print(") Cnt: ");
+  Serial.print(F(") Cnt: "));
   Serial.print(count);
-  Serial.print(" Res: ");
+  Serial.print(F(" Res: "));
   Serial.print(adcRms);
-  Serial.print(" Return: ");
+  Serial.print(F(" Return: "));
   Serial.println(ret);
 #endif
 
@@ -557,9 +549,9 @@ void handleLcd()
     m_LastPageChange = millis();
   }
 #ifdef DEBUG
-  Serial.print("Lcd handler took: ");
+  Serial.print(F("Lcd handler took: "));
   Serial.print(millis() - m_LcdHandlerDuration);
-  Serial.println("ms");
+  Serial.println(F("ms"));
 #endif
 }
 
