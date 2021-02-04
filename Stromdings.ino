@@ -207,10 +207,10 @@ void sendHttpRequest(const char* server)
 
 /**
  * MQTT topics for autodiscovery by Home Assistant:
- *   homeassistant/sensor/<Pxx>/config -> 
+ *   homeassistant/sensor/Stromdings_P16/config -> 
  *          {
  *              "dev_cla": "power",
- *              "stat_t": "homeassistant/sensor/P16/state",
+ *              "stat_t": "homeassistant/sensor/Stromdings_P16/state",
  *              "unit_of_meas": "W",
  *              "uniq_id": "Stromdings_P16",
  *              "name": "Stromdings P6",
@@ -219,7 +219,7 @@ void sendHttpRequest(const char* server)
  *                  "name": "Stromdings"
  *              }
  *          }
- *   homeassistant/sensor/<Pxx>/state -> <measured_watts>
+ *   homeassistant/sensor/Stromdings_P16/state -> <measured_watts>
  */
 
 void setupMqtt()
@@ -232,9 +232,8 @@ void setupMqtt()
     m_Lcd.print(F("MQTT connected"));
     m_Lcd.setCursor(0, 1);
 
-    // 31 chars: homeassistant/sensor/Pxx/config (maxint)
-    // 181 chars: {"dev_cla":"power","stat_t":"homeassistant/sensor/Pxx/state","unit_of_meas":"W","uniq_id":"Stromdings_Pxx","name":"Stromdings Pxx","dev":{"ids":["Stromdings"],"name":"Stromdings"}}
-
+    // 33+1 chars: disc/sensor/Stromdings_P16/config
+    // 182+1 chars: {"dev_cla":"power","stat_t":"disc/sensor/Stromdings_P16/state","unit_of_meas":"W","uniq_id":"Stromdings_Pxx","name":"Stromdings Pxx","dev":{"ids":["Stromdings"],"name":"Stromdings"}}
     char portnum[5];
     char topic[35];
     char msg[185];
@@ -243,13 +242,13 @@ void setupMqtt()
     {
       itoa(i, portnum, 10);
 
-      strcpy(topic, "homeassistant/sensor/P");
+      strcpy(topic, "disc/sensor/Stromdings_P");
       strcat(topic, portnum);
       strcat(topic, "/config");
 
       strcpy(msg, "{");
       strcat(msg, "\"dev_cla\":\"power\",");
-      strcat(msg, "\"stat_t\":\"homeassistant/sensor/P");
+      strcat(msg, "\"stat_t\":\"disc/sensor/Stromdings_P");
       strcat(msg, portnum);
       strcat(msg, "/state\",");
       strcat(msg, "\"unit_of_meas\":\"W\",");
@@ -275,6 +274,7 @@ void setupMqtt()
   }
   else
   {
+    m_Lcd.clear();
     m_Lcd.print(F("MQTT start error"));
     m_Lcd.setCursor(0, 1);
     m_Lcd.print(F("Code: "));
@@ -285,18 +285,18 @@ void setupMqtt()
 }
 
 // transmit a power measurement via MQTT
-void sendMeasurement(int port)
+void sendMeasurement(uint8_t port)
 {
-  char portnum[12];
+  char portnum[5];
   itoa(port + 1, portnum, 10);
 
-  // 38 chars: homeassistant/sensor/P4294967296/state (maxint)
-  char topic[45];
-  strcpy(topic, "homeassistant/sensor/P");
+  // 32+1 chars: disc/sensor/Stromdings_P16/state
+  char topic[35];
+  strcpy(topic, "disc/sensor/Stromdings_P");
   strcat(topic, portnum);
   strcat(topic, "/state");
 
-  char msg[12];
+  char msg[7];
   itoa(m_LastMeasurements[port], msg, 10);
 
   m_Lcd.setCursor(0, 1);
