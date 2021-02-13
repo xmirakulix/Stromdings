@@ -44,6 +44,7 @@ bool m_NetClientIsConnected = false;  // the client's connection status
 
 // ######## MQTT client
 PubSubClient m_MqttClient(m_NetClient);  // the WiFi client
+unsigned long m_MqttLastReconnect = 0;  // last reconnect time of MQTT client
 
 // ######## rotary encoder
 const uint8_t m_RotInput = 0;     // Pin A0 is used
@@ -84,6 +85,7 @@ void setup()
 void loop()
 {
   handleWiFi();
+  handleMqtt();
   handlePower();
   handleLcd();
 }
@@ -203,10 +205,10 @@ void sendHttpRequest(const char* server)
 
 /**
  * MQTT topics for autodiscovery by Home Assistant:
- *   homeassistant/sensor/Stromdings_P16/config -> 
+ *   disc/sensor/Stromdings_P16/config -> 
  *          {
  *              "dev_cla": "power",
- *              "stat_t": "homeassistant/sensor/Stromdings_P16/state",
+ *              "stat_t": "disc/sensor/Stromdings_P16/state",
  *              "unit_of_meas": "W",
  *              "uniq_id": "Stromdings_P16",
  *              "name": "Stromdings P6",
@@ -215,15 +217,32 @@ void sendHttpRequest(const char* server)
  *                  "name": "Stromdings"
  *              }
  *          }
- *   homeassistant/sensor/Stromdings_P16/state -> <measured_watts>
+ *   disc/sensor/Stromdings_P16/state -> <measured_watts>
  */
-
 void setupMqtt()
 {
-  m_MqttClient.setServer("homeassistant", 1883);
+    m_Lcd.clear();
+    m_Lcd.print(F("MQTT starting..."));
+    m_Lcd.setCursor(0, 1);
+    
+    m_MqttClient.setServer("homeassistant", 1883);
+    m_Lcd.print(F("MQTT server set"));
+}
 
+void handleMqtt() 
+{
+  if (m_MqttClient.connected() || (millis() - m_MqttLastReconnect) < 5000)
+    return;
+
+  m_MqttLastReconnect = millis();
+  m_MqttClient.loop();
+
+  m_Lcd.clear();
+  m_Lcd.print(F("MQTT connecting..."));
+  m_Lcd.setCursor(0, 1);
+    
   if (m_MqttClient.connect("Stromdings", "mosquitto", "mosquitto"))
-  {
+  {  
     m_Lcd.clear();
     m_Lcd.print(F("MQTT connected"));
     m_Lcd.setCursor(0, 1);
@@ -237,6 +256,10 @@ void setupMqtt()
     for (uint8_t i = 1; i <= m_NumPorts; i++)
     {
       itoa(i, portnum, 10);
+
+      m_Lcd.print(F("Startup pub P"));
+      m_Lcd.print(portnum);
+      m_Lcd.setCursor(0, 1);
 
       strcpy(topic, "disc/sensor/Stromdings_P");
       strcat(topic, portnum);
@@ -257,32 +280,33 @@ void setupMqtt()
       strcat(msg, "\"dev\":{\"ids\":[\"Stromdings\"],\"name\":\"Stromdings\"}");
       strcat(msg, "}");
 
-      if (!m_MqttClient.publish(topic, msg))
+      if (!m_MqttClient.publish(topic, msg, true))
       {
+        m_LastPageChange = millis();  // delay next page change
         m_Lcd.print(F("Startup pub err!"));
-        while (true)
-          ;
       }
     }
 
-    m_Lcd.print(F("Startup pub ok"));
-    delay(2000);
+    m_LastPageChange = millis();  // delay next page change
+    m_Lcd.print(F("Startup pub ok  "));
   }
   else
   {
+    m_LastPageChange = millis();  // delay next page change
     m_Lcd.clear();
     m_Lcd.print(F("MQTT start error"));
     m_Lcd.setCursor(0, 1);
     m_Lcd.print(F("Code: "));
     m_Lcd.print(m_MqttClient.state());
-    while (true)
-      ;
-  }
+  }  
 }
 
 // transmit a power measurement via MQTT
 void sendMeasurement(uint8_t port)
 {
+  if (!m_MqttClient.connected())
+    return;
+  
   char portnum[5];
   itoa(port + 1, portnum, 10);
 
@@ -295,8 +319,7 @@ void sendMeasurement(uint8_t port)
   char msg[7];
   itoa(m_LastMeasurements[port], msg, 10);
 
-  m_Lcd.setCursor(0, 1);
-  if (!m_MqttClient.publish(topic, msg))
+  if (!m_MqttClient.publish(topic, msg, false))
   {
     m_LastPageChange = millis();  // delay next page change
     m_Lcd.clear();
