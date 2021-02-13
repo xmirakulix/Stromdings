@@ -21,9 +21,10 @@ Requirements to the microcontroller:
 - i2c bus
 
 Used third party libraries:
-- [AltSoftSerial](https://github.com/xmirakulix/AltSoftSerial) (forked)
-- [WiFiEspAT](https://github.com/xmirakulix/WiFiEspAT) (forked)
-- [hd44780](https://github.com/duinoWitchery/hd44780)
+- Software serial: [AltSoftSerial](https://github.com/xmirakulix/AltSoftSerial) (forked)
+- WiFi (ESP8266): [WiFiEspAT](https://github.com/xmirakulix/WiFiEspAT) (forked)
+- i2c LCD (16x2): [hd44780](https://github.com/duinoWitchery/hd44780)
+- MQTT: [pubsubclient](https://github.com/xmirakulix/pubsubclient) (forked)
 
 ## Hardware
 
