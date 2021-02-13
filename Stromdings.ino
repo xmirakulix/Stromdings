@@ -25,9 +25,8 @@ const uint8_t m_CsPins[] = {4, 5, 6, 7};                      // list of ADC Chi
 const uint8_t m_AdcCnt = sizeof(m_CsPins) / sizeof(uint8_t);  // number of ADCs
 const uint8_t m_NumPorts = m_AdcCnt * 4;                      // number of available ports
 unsigned long m_LastMeasureTime = 0;                          // time of last measurement
-uint8_t m_curMeasurePort = 0;                                 // zuletzt gemessener Pin
-uint16_t m_LastMeasurements[m_NumPorts];                      // last measurement per port, 4*num of ADCs minus voltage
-const uint8_t m_Voltage = 230;                                // last measured voltage
+uint8_t m_curMeasurePort = 0;                                 // last measured Pin
+uint16_t m_LastMeasurements[m_NumPorts];                      // last measurement per port
 // const int m_PsuCalibration = 228.20;               // calibration factor for used 9VAC PSU
 
 // ######## LCD display
@@ -40,7 +39,6 @@ bool m_IsLcdBacklight = true;         // is the backlight on?
 
 // ######## WiFi / networking
 AltSoftSerial m_WifiPort(8, 9);       // must be 8 and 9 (interrupt used in library)
-int m_NetStatus = WL_IDLE_STATUS;     // the Wifi radio's status
 WiFiClient m_NetClient;               // WiFi client
 bool m_NetClientIsConnected = false;  // the client's connection status
 
@@ -64,9 +62,6 @@ void setup()
   while (!Serial)
     delay(10);
 
-  // setup the rotary ecoder
-  setupRotary();
-
   // setup LCD
   setupLcd();
 
@@ -79,6 +74,9 @@ void setup()
   // setup power measurement
   setupPower();
 
+  // setup the rotary ecoder
+  setupRotary();
+
   // const char *server = "home.parnigoni.net";
   // sendHttpRequest(server);
 }
@@ -87,7 +85,6 @@ void loop()
 {
   handleWiFi();
   handlePower();
-  handleEncoder();
   handleLcd();
 }
 
@@ -102,8 +99,9 @@ void handleWiFi()
   // if disconnected, stop the client
   if (m_NetClientIsConnected && !m_NetClient.connected())
   {
-    Serial.println();
+#ifdef DEBUG
     Serial.println(F("disconnecting from server."));
+#endif
     m_NetClient.stop();
     m_NetClientIsConnected = false;
   }
@@ -120,7 +118,7 @@ void setupWifi()
 
   if (WiFi.status() == WL_NO_MODULE)
   {
-    m_Lcd.print(F("No WiFi chip, not continuing"));
+    m_Lcd.print(F("No WiFi chip, stop."));
     while (true)
       ;
   }
@@ -135,9 +133,7 @@ void connectWiFi()
   m_Lcd.print(m_Ssid);
 
   // Connect to network
-  m_NetStatus = WiFi.begin(m_Ssid, m_Pass);
-  while (m_NetStatus != WL_CONNECTED)
-    ;
+  WiFi.begin(m_Ssid, m_Pass);
 
   m_Lcd.clear();
   m_Lcd.print(F("WiFi connected"));
@@ -338,13 +334,11 @@ void handlePower()
     Serial.println(adcPin);
 #endif
 
-    int measureDuration = 20 * 1000;  // 20k µs, 50Hz = 20ms pro Welle
-    m_LastMeasurements[m_curMeasurePort] = getAdcPower(m_CsPins[csPin], adcPin, measureDuration, 220, 2000, m_Voltage);
+    int measureDuration = 20 * 1000;  // 20k µs, 50Hz = 20ms per wave
+    m_LastMeasurements[m_curMeasurePort] = getAdcPower(m_CsPins[csPin], adcPin, measureDuration, 220, 2000, 230);
 
 #ifdef DEBUG
-    Serial.print(F(" V: "));
-    Serial.print(m_Voltage, 2);
-    Serial.print(F(" W["));
+    Serial.print(F("W["));
     Serial.print(m_curMeasurePort);
     Serial.print(F("]: "));
     Serial.print(m_LastMeasurements[m_curMeasurePort]);
@@ -405,7 +399,7 @@ float getAdcVoltage(int csPin, int adcPin, unsigned long measureDuration, float 
   primVoltage /= 1000;                  // conv to V
 
 #ifdef DEBUG
-  Serial.print(F("getAdcVoltage() Res: "));
+  Serial.print(F("getAdc: "));
   Serial.print(adcVal);
   Serial.print(F(" V: "));
   Serial.print(primVoltage);
@@ -562,7 +556,7 @@ void setupLcd()
   {
     // hd44780 has a fatalError() routine that blinks an led if possible
     // begin() failed so blink error code using the onboard LED if possible
-    Serial.println(F("setupLcd(): Failed to initialize LCD"));
+    Serial.println(F("Failed to initialize LCD"));
     hd44780::fatalError(status);  // does not return
   }
 
@@ -665,11 +659,6 @@ void setupRotary()
   PCICR |= (1 << m_RotIE);    // enable the correct Pin Change Interrupt Control Register
   PCMSK1 |= (1 << m_RotInt);  // enable interrupt in Pin Change Mask
   SREG = intr_state;          // enable interrupts again in the Status Register
-}
-
-// handleEncoder() to read the Encoder values
-void handleEncoder()
-{
 }
 
 // Interrupt Service Routine to read the Encoder values
