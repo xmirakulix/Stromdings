@@ -49,6 +49,8 @@ PCB:
 
 ## Ideas for the future
 
+- PCB: D1 orientation wrong
+- PCB: add reset button
 - PCB: Power cycle possibility for ESP-01
 - PCB: Optimize 2.5V ref voltage track routing
 - PCB: Check debounce cap necessity for rotary
