@@ -12,7 +12,7 @@ Features:
 
 ## Software
 
-Stromdings is an Arduino project, developed in VSCode using the [Arduino extension](https://marketplace.visualstudio.com/items?itemName=vsciot-vscode.vscode-arduino). It runs on an 16MHz ATMega328P microcontroller.
+Stromdings is an Arduino project, developed in VSCode using the [PlatrormIO extension](https://marketplace.visualstudio.com/items?itemName=platformio.platformio-ide). It runs on an 16MHz ATMega328P microcontroller.
 
 Requirements to the microcontroller:
 - Analog port with hardware pinchange interrupt
