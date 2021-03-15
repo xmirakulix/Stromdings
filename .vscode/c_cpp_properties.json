@@ -1,33 +1,68 @@
+//
+// !!! WARNING !!! AUTO-GENERATED FILE!
+// PLEASE DO NOT MODIFY IT AND USE "platformio.ini":
+// https://docs.platformio.org/page/projectconf/section_env_build.html#build-flags
+//
 {
     "configurations": [
         {
-            "name": "Mac",
+            "name": "PlatformIO",
             "includePath": [
-                // use IntellisenseEngine "Tag Parser" in .settings!!
-                "/Applications/Arduino.app/Contents/Java/tools/**",
-                "/Applications/Arduino.app/Contents/Java/libraries/**",
-                "/Applications/Arduino.app/Contents/Java/hardware/tools/**",
-                "/Applications/Arduino.app/Contents/Java/hardware/arduino/avr/**",
-                //"/Users/flo/Documents/Arduino/libraries/**",
-                "${workspaceFolder}/**"
+                "/Users/flo/Documents/PlatformIO/Projects/Stromdings/include",
+                "/Users/flo/Documents/PlatformIO/Projects/Stromdings/src",
+                "/Users/flo/.platformio/packages/framework-arduino-avr-minicore/libraries/Wire/src",
+                "/Users/flo/Documents/PlatformIO/Projects/Stromdings/lib/hd44780",
+                "/Users/flo/Documents/PlatformIO/Projects/Stromdings/lib/pubsubclient/src",
+                "/Users/flo/Documents/PlatformIO/Projects/Stromdings/lib/AltSoftSerial",
+                "/Users/flo/Documents/PlatformIO/Projects/Stromdings/lib/WiFiEspAT/src",
+                "/Users/flo/.platformio/packages/framework-arduino-avr-minicore/libraries/SPI/src",
+                "/Users/flo/.platformio/packages/framework-arduino-avr-minicore/cores/MiniCore",
+                "/Users/flo/.platformio/packages/framework-arduino-avr-minicore/variants/standard",
+                "/Users/flo/.platformio/packages/framework-arduino-avr-minicore/libraries/AVR_examples/src",
+                "/Users/flo/.platformio/packages/framework-arduino-avr-minicore/libraries/EEPROM/src",
+                "/Users/flo/.platformio/packages/framework-arduino-avr-minicore/libraries/Optiboot_flasher/src",
+                "/Users/flo/.platformio/packages/framework-arduino-avr-minicore/libraries/SPI1/src",
+                "/Users/flo/.platformio/packages/framework-arduino-avr-minicore/libraries/SoftwareSerial/src",
+                "/Users/flo/.platformio/packages/framework-arduino-avr-minicore/libraries/Wire1/src",
+                ""
             ],
+            "browse": {
+                "limitSymbolsToIncludedHeaders": true,
+                "path": [
+                    "/Users/flo/Documents/PlatformIO/Projects/Stromdings/include",
+                    "/Users/flo/Documents/PlatformIO/Projects/Stromdings/src",
+                    "/Users/flo/.platformio/packages/framework-arduino-avr-minicore/libraries/Wire/src",
+                    "/Users/flo/Documents/PlatformIO/Projects/Stromdings/lib/hd44780",
+                    "/Users/flo/Documents/PlatformIO/Projects/Stromdings/lib/pubsubclient/src",
+                    "/Users/flo/Documents/PlatformIO/Projects/Stromdings/lib/AltSoftSerial",
+                    "/Users/flo/Documents/PlatformIO/Projects/Stromdings/lib/WiFiEspAT/src",
+                    "/Users/flo/.platformio/packages/framework-arduino-avr-minicore/libraries/SPI/src",
+                    "/Users/flo/.platformio/packages/framework-arduino-avr-minicore/cores/MiniCore",
+                    "/Users/flo/.platformio/packages/framework-arduino-avr-minicore/variants/standard",
+                    "/Users/flo/.platformio/packages/framework-arduino-avr-minicore/libraries/AVR_examples/src",
+                    "/Users/flo/.platformio/packages/framework-arduino-avr-minicore/libraries/EEPROM/src",
+                    "/Users/flo/.platformio/packages/framework-arduino-avr-minicore/libraries/Optiboot_flasher/src",
+                    "/Users/flo/.platformio/packages/framework-arduino-avr-minicore/libraries/SPI1/src",
+                    "/Users/flo/.platformio/packages/framework-arduino-avr-minicore/libraries/SoftwareSerial/src",
+                    "/Users/flo/.platformio/packages/framework-arduino-avr-minicore/libraries/Wire1/src",
+                    ""
+                ]
+            },
             "defines": [
-                "USBCON",
+                "PLATFORMIO=50100",
+                "ARDUINO_AVR_ATmega328P",
                 "F_CPU=16000000L",
-                "ARDUINO=10813",
-                "ARDUINO_AVR_UNO",
                 "ARDUINO_ARCH_AVR",
-                "WIFIESPAT_LOG_LEVEL=LOG_LEVEL_WARN"
+                "ARDUINO=10808",
+                "__AVR_ATmega328P__",
+                ""
             ],
-            "macFrameworkPath": [
-                "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/System/Library/Frameworks"
-            ],
-            "compilerPath": "/usr/bin/clang",
             "cStandard": "c11",
-            "cppStandard": "c++17",
-            "intelliSenseMode": "clang-x64",
-            "forcedInclude": [
-                "/Applications/Arduino.app/Contents/Java/hardware/arduino/avr/cores/arduino/Arduino.h"
+            "cppStandard": "c++11",
+            "compilerPath": "/Users/flo/.platformio/packages/toolchain-atmelavr/bin/avr-gcc",
+            "compilerArgs": [
+                "-mmcu=atmega328p",
+                ""
             ]
         }
     ],
